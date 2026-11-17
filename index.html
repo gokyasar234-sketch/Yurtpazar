@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>YurtPazar - Canlı Öğrenci Pazaryeri</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- Font Awesome Icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+
+<script>
+tailwind.config = {
+theme: {
+extend: {
+fontFamily: { sans: ['Inter', 'sans-serif'] },
+colors: { navy: { 900: '#0a192f', 800: '#112240', 700: '#1d3557' } }
+}
+}
+}
+</script>
+<style>
+body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.star-seller-border { border: 2px solid #f59e0b !important; background: linear-gradient(145deg, #ffffff 0%, #fffbeb 100%); box-shadow: 0 4px 16px -2px rgba(245, 158, 11, 0.25); }
+</style>
+</head>
+<body class="text-slate-800 antialiased pb-28">
+
+<!-- BİLDİRİM KUTUSU -->
+<div id="toast-box" class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-11/12 max-w-md pointer-events-none flex flex-col gap-2"></div>
+
+<!-- GİZLİ ADMIN PIN MODALI -->
+<div id="admin-pin-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[90] hidden items-center justify-center p-4">
+<div class="bg-navy-900 text-white w-full max-w-sm rounded-3xl p-6 border border-slate-700 shadow-2xl space-y-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2 text-amber-400">
+<i class="fa-solid fa-shield-halved text-xl"></i>
+<h3 class="font-bold text-base">Yönetici Güvenlik Kilidi</h3>
+</div>
+<button type="button" onclick="closeAdminPinModal()" class="text-slate-400 hover:text-white p-2 cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+</div>
+<p class="text-xs text-slate-300 leading-relaxed">Bu alan yalnızca yetkili yurt yöneticisine özeldir. Doğru PIN girildiğinde <strong>bu cihaz</strong> yönetici cihazı olarak kilitlenir.</p>
+<input type="password" id="admin-pin-input" placeholder="PIN Kodu (ADMIN2026)" class="w-full bg-navy-800 border border-slate-600 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-400">
+<button type="button" onclick="verifyAdminPin()" class="w-full bg-amber-500 hover:bg-amber-400 text-navy-900 font-bold py-3 rounded-xl shadow-lg cursor-pointer active:scale-95 transition">Cihazı Mühürle ve Panele Gir</button>
+</div>
+</div>
+
+<!-- YENİ İLAN EKLEME MODALI -->
+<div id="add-listing-modal" class="fixed inset-0 bg-slate-900/75 backdrop-blur-xs z-[80] hidden items-end sm:items-center justify-center p-0 sm:p-4">
+<div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 max-h-[90vh] overflow-y-auto shadow-2xl space-y-3">
+<div class="flex items-center justify-between border-b border-slate-100 pb-3">
+<h3 class="font-bold text-base text-navy-900 flex items-center gap-2"><i class="fa-solid fa-circle-plus text-emerald-600"></i> Yeni İlan / Hizmet Ekle</h3>
+<button type="button" onclick="closeAddModal()" class="text-slate-400 hover:text-slate-700 p-2 cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+</div>
+<form onsubmit="submitNewListing(event)" class="space-y-3">
+<div>
+<label class="block text-xs font-bold text-slate-700 mb-1">Kategori</label>
+<select id="new-item-cat" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-navy-900">
+<option value="Yiyecek & İçecek">🍔 Yiyecek & İçecek</option>
+<option value="2. El Eşya">🔌 2. El Eşya</option>
+<option value="Ders Notları">📚 Ders Notları</option>
+<option value="Özel Ders">🎓 Özel Ders</option>
+<option value="Tamir">🛠️ Tamir</option>
+</select>
+</div>
+<div>
+<label class="block text-xs font-bold text-slate-700 mb-1">Ürün veya Hizmet Başlığı</label>
+<input type="text" id="new-item-title" required placeholder="Örn: Soğuk Baget Sandviç + Ayran" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-navy-900">
+</div>
+<div class="grid grid-cols-2 gap-3">
+<div>
+<label class="block text-xs font-bold text-slate-700 mb-1">Fiyat (₺)</label>
+<input type="number" id="new-item-price" min="1" required placeholder="Örn: 50" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-navy-900">
+</div>
+<div>
+<label class="block text-xs font-bold text-slate-700 mb-1">Blok / Oda</label>
+<input type="text" id="new-item-room" placeholder="Örn: B Blok 304" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-navy-900">
+</div>
+</div>
+<div>
+<label class="block text-xs font-bold text-slate-700 mb-1">Açıklama</label>
+<textarea id="new-item-desc" rows="2" required placeholder="Detayları yazın..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-navy-900"></textarea>
+</div>
+<div>
+<label class="block text-xs font-bold text-slate-700 mb-1">WhatsApp Numaranız</label>
+<input type="tel" id="new-item-phone" required placeholder="905551234567" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-emerald-600">
+</div>
+<div class="bg-red-50 border border-red-200 p-2.5 rounded-xl text-[11px] text-red-800">
+<i class="fa-solid fa-triangle-exclamation mr-1"></i> Tost makinesi, kettle, çay, alkol, tütün ve yurt kurallarına aykırı ürünlerin ilanı otomatik engellenir.
+</div>
+<button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl shadow-md cursor-pointer active:scale-95 transition">İlanı Yayınla</button>
+</form>
+</div>
+</div>
+
+<!-- 1. GİRİŞ EKRANI -->
+<div id="auth-view" class="min-h-screen max-w-md mx-auto bg-white shadow-xl flex flex-col justify-between p-6">
+<div class="pt-6 text-center">
+<div onclick="handleLogoSecretTap()" class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-navy-900 text-white shadow-lg mb-4 cursor-pointer active:scale-95 transition">
+<i class="fa-solid fa-building-user text-3xl text-emerald-400"></i>
+</div>
+<h1 class="text-2xl font-extrabold text-navy-900 tracking-tight">YurtPazar</h1>
+<p class="text-xs text-slate-500 mt-1">Canlı Öğrenci Pazaryeri</p>
+</div>
+
+<div class="my-auto py-4">
+<div class="bg-slate-50 p-5 rounded-3xl border border-slate-200 shadow-sm">
+<div class="grid grid-cols-2 gap-2 p-1 bg-slate-200/80 rounded-2xl mb-5">
+<button type="button" id="tab-btn-buyer" onclick="switchAuthTab('buyer')" class="py-2.5 px-3 rounded-xl text-xs font-bold bg-navy-900 text-white shadow cursor-pointer transition">
+<i class="fa-solid fa-bag-shopping mr-1"></i> Müşteri Girişi
+</button>
+<button type="button" id="tab-btn-seller" onclick="switchAuthTab('seller')" class="py-2.5 px-3 rounded-xl text-xs font-bold text-slate-600 hover:text-navy-900 cursor-pointer transition">
+<i class="fa-solid fa-store mr-1"></i> Satıcı Girişi
+</button>
+</div>
+
+<form onsubmit="handleAuthSubmit(event)" class="space-y-3.5">
+<div>
+<label class="block text-xs font-bold text-slate-700 mb-1">İsim Soyisim</label>
+<input type="text" id="auth-fullname" required placeholder="Örn: Ahmet Yılmaz" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-navy-900">
+</div>
+<div>
+<label class="block text-xs font-bold text-slate-700 mb-1">E-posta Adresi</label>
+<input type="email" id="auth-email" required placeholder="ornek@ogrenci.edu.tr" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-navy-900">
+</div>
+<div id="seller-phone-wrapper" class="hidden">
+<label class="block text-xs font-bold text-slate-700 mb-1">WhatsApp Telefon Numarası</label>
+<input type="tel" id="auth-phone" placeholder="905551234567" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-emerald-600">
+</div>
+<button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl shadow-md cursor-pointer active:scale-95 transition text-sm mt-2">
+Giriş Yap <i class="fa-solid fa-arrow-right ml-1"></i>
+</button>
+</form>
+
+<div class="mt-4 pt-3 border-t border-slate-200">
+<p class="text-[11px] text-center text-slate-400 mb-2">Tek Tıkla Hızlı Giriş:</p>
+<div class="grid grid-cols-2 gap-2">
+<button type="button" onclick="quickLogin('buyer')" class="py-2.5 px-2 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-700 cursor-pointer active:scale-95 transition">🧑‍🎓 Müşteri</button>
+<button type="button" onclick="quickLogin('seller')" class="py-2.5 px-2 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-700 cursor-pointer active:scale-95 transition">⭐ Yıldız Satıcı</button>
+</div>
+</div>
+</div>
+</div>
+<p id="cloud-status-text" class="text-center text-[11px] text-slate-400 pb-2">Bulut durumu kontrol ediliyor...</p>
+</div>
+
+<!-- 2. ANA UYGULAMA EKRANI -->
+<div id="app-view" class="hidden min-h-screen max-w-md mx-auto bg-slate-50 shadow-2xl flex flex-col">
+<header class="bg-navy-900 text-white px-4 py-3.5 sticky top-0 z-40 shadow-md flex items-center justify-between">
+<div onclick="handleLogoSecretTap()" class="flex items-center gap-2.5 cursor-pointer select-none">
+<div class="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-emerald-400"><i class="fa-solid fa-building-user"></i></div>
+<div>
+<div class="flex items-center gap-1.5">
+<span class="font-extrabold text-base tracking-tight">YurtPazar</span>
+<span id="top-role-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-400 text-navy-900">MÜŞTERİ</span>
+</div>
+<p id="top-user-name" class="text-xs text-slate-300 truncate max-w-[160px]">Kullanıcı</p>
+</div>
+</div>
+<button type="button" onclick="openAddModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-2 rounded-xl shadow cursor-pointer active:scale-95 transition flex items-center gap-1">
+<i class="fa-solid fa-plus"></i> İlan Ver
+</button>
+</header>
+
+<main class="flex-1 pb-20">
+<!-- PAZAR SEKMESİ -->
+<div id="page-pazar" class="app-page p-4 space-y-4">
+<div id="esnaf-ad-box" class="rounded-2xl overflow-hidden shadow-sm border border-slate-200 bg-white"></div>
+<div class="relative">
+<i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-slate-400 text-sm"></i>
+<input type="text" id="market-search" oninput="renderMarketListings()" placeholder="Sandviç, ders notu, lamba ara..." class="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-navy-900 shadow-xs">
+</div>
+<div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+<button type="button" onclick="selectCategory('Tümü')" data-cat="Tümü" class="cat-filter-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold bg-navy-900 text-white cursor-pointer transition">Tümü</button>
+<button type="button" onclick="selectCategory('Yiyecek & İçecek')" data-cat="Yiyecek & İçecek" class="cat-filter-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-slate-600 border border-slate-200 cursor-pointer transition">🍔 Yiyecek & İçecek</button>
+<button type="button" onclick="selectCategory('2. El Eşya')" data-cat="2. El Eşya" class="cat-filter-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-slate-600 border border-slate-200 cursor-pointer transition">🔌 2. El Eşya</button>
+<button type="button" onclick="selectCategory('Ders Notları')" data-cat="Ders Notları" class="cat-filter-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-slate-600 border border-slate-200 cursor-pointer transition">📚 Ders Notları</button>
+<button type="button" onclick="selectCategory('Özel Ders')" data-cat="Özel Ders" class="cat-filter-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-slate-600 border border-slate-200 cursor-pointer transition">🎓 Özel Ders</button>
+<button type="button" onclick="selectCategory('Tamir')" data-cat="Tamir" class="cat-filter-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-slate-600 border border-slate-200 cursor-pointer transition">🛠️ Tamir</button>
+</div>
+<div class="flex items-center justify-between bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl text-[11px] text-emerald-900">
+<span class="font-semibold"><i class="fa-solid fa-arrow-down-1-9 mr-1"></i> En ucuz fiyat ilk sırada</span>
+<span id="pazar-discount-badge" class="font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">⭐ 10+ Alışverişte %10 İndirim</span>
+</div>
+<div id="market-list-container" class="space-y-3"></div>
+</div>
+
+<!-- YEMEK & OTOBÜS SEKMESİ -->
+<div id="page-yemek" class="app-page hidden p-4 space-y-5">
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+<div class="bg-navy-900 text-white px-4 py-3 flex items-center justify-between">
+<h2 class="font-bold text-sm flex items-center gap-2"><i class="fa-solid fa-utensils text-amber-400"></i> Yurt Günlük Yemek Menüsü</h2>
+<span class="text-[11px] bg-navy-800 px-2.5 py-0.5 rounded-full text-slate-300">Bugün</span>
+</div>
+<div class="p-4 space-y-3">
+<div class="bg-amber-50 border border-amber-200 rounded-xl p-3.5">
+<div class="text-xs font-extrabold text-amber-900 mb-1.5"><i class="fa-solid fa-sun text-amber-600 mr-1"></i> SABAH KAHVALTISI (06:30 - 10:30)</div>
+<ul id="menu-breakfast-list" class="text-xs text-slate-700 space-y-1 font-medium"></ul>
+</div>
+<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5">
+<div class="text-xs font-extrabold text-emerald-900 mb-1.5"><i class="fa-solid fa-moon text-emerald-600 mr-1"></i> AKŞAM YEMEĞİ (16:30 - 21:30)</div>
+<ul id="menu-dinner-list" class="text-xs text-slate-700 space-y-1 font-medium"></ul>
+</div>
+</div>
+</div>
+
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+<div class="bg-navy-900 text-white px-4 py-3 flex items-center justify-between">
+<h2 class="font-bold text-sm flex items-center gap-2"><i class="fa-solid fa-bus text-emerald-400"></i> Otobüs Seferleri</h2>
+<span id="bus-live-time" class="text-xs font-mono font-bold text-emerald-400">--:--</span>
+</div>
+<div id="bus-list-container" class="p-4 space-y-3"></div>
+</div>
+</div>
+
+<!-- DİLEK & ŞİKAYET SEKMESİ -->
+<div id="page-dilek" class="app-page hidden p-4 space-y-4">
+<div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+<h2 class="font-bold text-base text-navy-900 flex items-center gap-2 mb-1"><i class="fa-solid fa-comment-dots text-emerald-600"></i> Dilek ve Şikayet Kutusu</h2>
+<p class="text-xs text-slate-500 mb-4">Görüşlerinizi doğrudan yönetime iletin.</p>
+<form onsubmit="submitFeedback(event)" class="space-y-3">
+<div>
+<label class="block text-xs font-bold text-slate-700 mb-1">Konu Türü</label>
+<select id="fb-category" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-navy-900">
+<option value="Dilek / Öneri">💡 Dilek & Öneri</option>
+<option value="Yurt / Yemek Şikayeti">🏢 Yurt & Yemekhane Şikayeti</option>
+<option value="Satıcı / İlan Bildirimi">🚨 Satıcı / Kural İhlali Şikayeti</option>
+</select>
+</div>
+<div>
+<label class="block text-xs font-bold text-slate-700 mb-1">Başlık</label>
+<input type="text" id="fb-title" required placeholder="Örn: Akşam otobüs saati hk." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-navy-900">
+</div>
+<div>
+<label class="block text-xs font-bold text-slate-700 mb-1">Açıklama</label>
+<textarea id="fb-body" rows="3" required placeholder="Mesajınızı yazın..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-navy-900"></textarea>
+</div>
+<button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl shadow cursor-pointer active:scale-95 transition text-sm">Yönetime Gönder</button>
+</form>
+</div>
+<div>
+<h3 class="font-bold text-sm text-navy-900 mb-2">Gönderdiğim Bildirimler</h3>
+<div id="my-feedbacks-container" class="space-y-2.5"></div>
+</div>
+</div>
+
+<!-- PROFİL SEKMESİ -->
+<div id="page-profil" class="app-page hidden p-4 space-y-4">
+<div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+<div class="flex items-center gap-3.5">
+<div class="w-14 h-14 rounded-2xl bg-navy-900 text-white flex items-center justify-center text-xl font-bold"><i class="fa-solid fa-user-graduate text-emerald-400"></i></div>
+<div>
+<h2 id="prof-name" class="font-bold text-base text-navy-900">İsim Soyisim</h2>
+<p id="prof-email" class="text-xs text-slate-500">ornek@ogrenci.edu.tr</p>
+<span id="prof-role-tag" class="inline-block mt-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800">Müşteri Hesabı</span>
+</div>
+</div>
+<div class="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+<div class="flex items-center justify-between mb-1">
+<span class="text-xs font-extrabold text-amber-900"><i class="fa-solid fa-star text-amber-500 mr-1"></i> Yıldız Satıcı İndirimi</span>
+<span id="prof-purchase-count" class="text-xs font-extrabold text-navy-900 bg-amber-300 px-2.5 py-0.5 rounded-full">0 Alışveriş</span>
+</div>
+<p id="prof-discount-desc" class="text-xs text-amber-800 mt-1 leading-relaxed"></p>
+</div>
+<div id="prof-admin-entry" class="hidden pt-1">
+<button type="button" onclick="switchTab('admin')" class="w-full bg-navy-900 hover:bg-navy-800 text-amber-400 border border-amber-500/40 font-bold py-3 rounded-xl shadow cursor-pointer active:scale-95 transition text-sm flex items-center justify-center gap-2">
+<i class="fa-solid fa-shield-halved"></i> Admin Panelini Aç (Yetkili Cihaz)
+</button>
+</div>
+<button type="button" onclick="handleLogout()" class="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold py-3 rounded-xl cursor-pointer active:scale-95 transition text-sm">
+<i class="fa-solid fa-right-from-bracket mr-1"></i> Çıkış Yap
+</button>
+</div>
+<div>
+<h3 class="font-bold text-sm text-navy-900 mb-2">Yayındaki İlanlarım</h3>
+<div id="prof-my-listings" class="space-y-2"></div>
+</div>
+</div>
+
+<!-- GİZLİ ADMIN PANELİ -->
+<div id="page-admin" class="app-page hidden p-4 space-y-4 bg-slate-900 text-white min-h-[82vh]">
+<div class="bg-navy-800 border border-amber-500/40 p-4 rounded-2xl flex items-center justify-between">
+<div>
+<span class="text-[10px] font-extrabold bg-amber-400 text-navy-900 px-2 py-0.5 rounded">CİHAZ KİLİTLİ YÖNETİM</span>
+<h2 class="font-bold text-base mt-1">Admin Kontrol Merkezi</h2>
+</div>
+<button type="button" onclick="switchTab('pazar')" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold px-3 py-2 rounded-xl cursor-pointer">Pazara Dön</button>
+</div>
+
+<div class="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+<button type="button" onclick="switchAdminTab('users')" id="admtab-users" class="adm-tab-btn px-3 py-2 rounded-xl text-xs font-bold bg-amber-500 text-navy-900 whitespace-nowrap cursor-pointer">👥 Üyeler</button>
+<button type="button" onclick="switchAdminTab('listings')" id="admtab-listings" class="adm-tab-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap cursor-pointer">📦 İlanlar</button>
+<button type="button" onclick="switchAdminTab('ads')" id="admtab-ads" class="adm-tab-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap cursor-pointer">📢 Esnaf Reklamı</button>
+<button type="button" onclick="switchAdminTab('life')" id="admtab-life" class="adm-tab-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap cursor-pointer">🍲 Yemek & Otobüs</button>
+<button type="button" onclick="switchAdminTab('feedbacks')" id="admtab-feedbacks" class="adm-tab-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap cursor-pointer">📩 Şikayetler</button>
+</div>
+
+<div id="admpanel-users" class="space-y-2.5">
+<h3 class="text-xs font-bold text-amber-400 uppercase">Kayıtlı Üyeler</h3>
+<div id="adm-users-list" class="space-y-2"></div>
+</div>
+
+<div id="admpanel-listings" class="hidden space-y-2.5">
+<h3 class="text-xs font-bold text-amber-400 uppercase">Yayındaki İlanlar</h3>
+<div id="adm-listings-list" class="space-y-2"></div>
+</div>
+
+<div id="admpanel-ads" class="hidden space-y-3">
+<form onsubmit="adminAddEsnafAd(event)" class="bg-slate-800 p-3.5 rounded-2xl border border-slate-700 space-y-2.5">
+<h3 class="text-xs font-bold text-emerald-400">+ Yeni Esnaf Reklamı Ekle</h3>
+<input type="text" id="adm-ad-name" required placeholder="İşletme Adı" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white">
+<input type="text" id="adm-ad-text" required placeholder="Kampanya Açıklaması" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white">
+<div class="grid grid-cols-2 gap-2">
+<input type="tel" id="adm-ad-phone" required placeholder="WhatsApp (905...)" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white">
+<input type="text" id="adm-ad-rent" required placeholder="Kira/Gelir (Örn: 800₺)" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white">
+</div>
+<button type="submit" class="w-full bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-xs cursor-pointer">Yayınla</button>
+</form>
+<div id="adm-ads-list" class="space-y-2"></div>
+</div>
+
+<div id="admpanel-life" class="hidden space-y-3">
+<div class="bg-slate-800 p-3.5 rounded-2xl border border-slate-700 space-y-2.5">
+<h3 class="text-xs font-bold text-amber-400">Yemek Menüsünü Düzenle</h3>
+<textarea id="adm-edit-breakfast" rows="2" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white" placeholder="Kahvaltı..."></textarea>
+<textarea id="adm-edit-dinner" rows="2" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white" placeholder="Akşam..."></textarea>
+<button type="button" onclick="adminSaveMenu()" class="w-full bg-amber-500 text-navy-900 font-bold py-2.5 rounded-xl text-xs cursor-pointer">Menüyü Güncelle</button>
+</div>
+<div class="bg-slate-800 p-3.5 rounded-2xl border border-slate-700 space-y-2.5">
+<h3 class="text-xs font-bold text-emerald-400">Otobüs Saatleri</h3>
+<div id="adm-bus-edit-list" class="space-y-2"></div>
+</div>
+</div>
+
+<div id="admpanel-feedbacks" class="hidden space-y-2.5">
+<h3 class="text-xs font-bold text-amber-400 uppercase">Dilek ve Şikayetler</h3>
+<div id="adm-feedbacks-list" class="space-y-2"></div>
+</div>
+</div>
+</main>
+
+<!-- ALT NAVİGASYON (GARANTİ ÇALIŞAN BUTONLAR) -->
+<nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white border-t border-slate-200 px-2 py-2 grid grid-cols-4 z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+<button type="button" onclick="switchTab('pazar')" id="btn-pazar" class="flex flex-col items-center justify-center py-1 text-navy-900 font-bold cursor-pointer">
+<i class="fa-solid fa-store text-lg mb-0.5"></i><span class="text-[11px]">Pazar</span>
+</button>
+<button type="button" onclick="switchTab('yemek')" id="btn-yemek" class="flex flex-col items-center justify-center py-1 text-slate-400 cursor-pointer">
+<i class="fa-solid fa-utensils text-lg mb-0.5"></i><span class="text-[11px]">Yemek & Otobüs</span>
+</button>
+<button type="button" onclick="switchTab('dilek')" id="btn-dilek" class="flex flex-col items-center justify-center py-1 text-slate-400 cursor-pointer">
+<i class="fa-solid fa-comment-dots text-lg mb-0.5"></i><span class="text-[11px]">Şikayet</span>
+</button>
+<button type="button" onclick="switchTab('profil')" id="btn-profil" class="flex flex-col items-center justify-center py-1 text-slate-400 cursor-pointer">
+<i class="fa-solid fa-user text-lg mb-0.5"></i><span class="text-[11px]">Profil</span>
+</button>
+</nav>
+</div>
+
+<script>
+// ==========================================
+// 1. FİREBASE AYARLARI (Kendi bilgilerini buraya yapıştır)
+// ==========================================
+const firebaseConfig = {
+apiKey: "SENIN_API_KEY",
+authDomain: "senin-proje.firebaseapp.com",
+projectId: "senin-proje",
+storageBucket: "senin-proje.appspot.com",
+messagingSenderId: "123456789",
+appId: "1:123:web:live"
+};
+
+// Firebase anahtarları girilmiş mi kontrolü (Sahte anahtar varken uygulamanın kilitlenmesini önler)
+const isCloudReady = firebaseConfig.apiKey && firebaseConfig.apiKey !== "SENIN_API_KEY";
+let dbCloud = null;
+
+if (isCloudReady) {
+try {
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+dbCloud = firebase.firestore();
+} catch (err) {
+console.error("Firebase başlatma hatası:", err);
+}
+}
+
+const USER_KEY = 'yurtpazar_user_v6';
+const DB_KEY = 'yurtpazar_local_db_v6';
+const ADMIN_LOCK_KEY = 'yp_device_admin_lock_v6';
+const BANNED_WORDS = ['tost', 'kettle', 'ketıl', 'ısıtıcı', 'rezistans', 'çay makinesi', 'semaver', 'alkol', 'bira', 'rakı', 'viski', 'şarap', 'sigara', 'tütün', 'puff', 'bıçak', 'silah', 'kumar'];
+
+let currentUser = JSON.parse(localStorage.getItem(USER_KEY)) || null;
+let authRole = 'buyer';
+let activeCategory = 'Tümü';
+let adSlideIndex = 0;
+let logoTapCounter = 0;
+let logoTapTimeout = null;
+
+// Varsayılan başlangıç verileri
+const defaultDb = {
+users: [
+{ id: 'quick-buyer', name: 'Mert Kaya (Müşteri)', email: 'mert@ogrenci.edu.tr', role: 'buyer', phone: '905551112233', purchases: 12, salesCount: 0, banned: false },
+{ id: 'quick-seller', name: 'Zeynep Demir (Yıldız Satıcı)', email: 'zeynep@ogrenci.edu.tr', role: 'seller', phone: '905551112233', purchases: 3, salesCount: 15, banned: false }
+ ],
+listings: [
+{ id: 'l1', sellerId: 'quick-seller', sellerEmail: 'zeynep@ogrenci.edu.tr', sellerName: 'Zeynep Demir', category: 'Yiyecek & İçecek', title: 'Ev Yapımı Bol Malzemeli Soğuk Sandviç', price: 45, room: 'B Blok 204', desc: 'Taze kaşar, salam, domates ve özel soslu.', phone: '905551112233' },
+{ id: 'l2', sellerId: 'quick-seller', sellerEmail: 'zeynep@ogrenci.edu.tr', sellerName: 'Zeynep Demir', category: 'Ders Notları', title: 'Matematik 1 Vize + Final Çıkmış Sorular', price: 30, room: 'B Blok 204', desc: 'Temiz el yazısı, çözümlü PDF ve fotokopi.', phone: '905551112233' },
+{ id: 'l3', sellerId: 'quick-buyer', sellerEmail: 'mert@ogrenci.edu.tr', sellerName: 'Mert Kaya', category: '2. El Eşya', title: 'LED Masa Lambası (Şarjlı)', price: 120, room: 'A Blok 112', desc: '3 kademeli ışık, kutusu duruyor.', phone: '905551112233' }
+ ],
+ads: [
+{ id: 'ad1', name: 'Kampüs Copy & Kırtasiye', text: 'Çıktılarda yurt öğrencilerine özel %25 İNDİRİM!', phone: '905550001122', rent: '1.200₺ / Ay' },
+{ id: 'ad2', name: 'Express Çamaşırhane', text: 'Mont yıkamada 2 al 1 öde! Yurttan ücretsiz alım.', phone: '905550003344', rent: '900₺ / Ay' }
+ ],
+menu: {
+breakfast: ['Haşlanmış Yumurta', 'Beyaz Peynir & Zeytin', 'Domates - Salatalık', 'Tereyağı & Reçel', 'Çay'],
+dinner: ['Mercimek Çorbası', 'Orman Kebabı', 'Pirinç Pilavı', 'Mevsim Salata', 'Tatlı']
+},
+buses: [
+{ id: 'b1', line: '14K', route: 'KYK Yurt Önü ➔ Kampüs', times: '07:15, 08:15, 09:30, 12:30, 16:30, 17:30' },
+{ id: 'b2', line: '22M', route: 'KYK Yurt Önü ➔ Şehir Merkezi', times: '08:00, 11:00, 14:00, 18:00, 20:30, 22:00' }
+ ],
+feedbacks: []
+};
+
+let db = JSON.parse(localStorage.getItem(DB_KEY)) || defaultDb;
+
+function saveLocalDb() {
+localStorage.setItem(DB_KEY, JSON.stringify(db));
+}
+
+function initCloudSync() {
+const statusText = document.getElementById('cloud-status-text');
+if (!isCloudReady || !dbCloud) {
+if (statusText) statusText.textContent = 'Hızlı Yerel Mod Aktif (Firebase anahtarı girildiğinde canlı buluta geçer)';
+return;
+}
+
+if (statusText) statusText.textContent = '🟢 Google Firebase Canlı Bulut Bağlantısı Aktif';
+
+dbCloud.collection("listings").onSnapshot((snapshot) => {
+const cloudListings = [];
+snapshot.forEach((doc) => cloudListings.push({ id: doc.id, ...doc.data() }));
+if (cloudListings.length > 0) {
+db.listings = cloudListings;
+saveLocalDb();
+if (currentUser) renderMarketListings();
+}
+});
+
+dbCloud.collection("users").onSnapshot((snapshot) => {
+const cloudUsers = [];
+snapshot.forEach((doc) => cloudUsers.push({ id: doc.id, ...doc.data() }));
+if (cloudUsers.length > 0) {
+db.users = cloudUsers;
+saveLocalDb();
+}
+});
+
+dbCloud.collection("feedbacks").onSnapshot((snapshot) => {
+const cloudFb = [];
+snapshot.forEach((doc) => cloudFb.push({ id: doc.id, ...doc.data() }));
+if (cloudFb.length > 0) {
+db.feedbacks = cloudFb;
+saveLocalDb();
+}
+});
+}
+
+function saveUser() {
+if (currentUser) {
+localStorage.setItem(USER_KEY, JSON.stringify(currentUser));
+const idx = db.users.findIndex(u => u.email === currentUser.email);
+if (idx >= 0) db.users[idx] = currentUser;
+else db.users.push(currentUser);
+saveLocalDb();
+
+if (isCloudReady && dbCloud) {
+dbCloud.collection("users").doc(currentUser.email).set(currentUser, { merge: true }).catch(() => {});
+}
+} else {
+localStorage.removeItem(USER_KEY);
+}
+}
+
+function showToast(msg, type = 'success') {
+const box = document.getElementById('toast-box');
+if (!box) return;
+const el = document.createElement('div');
+const styles = { success: 'bg-navy-900 border-emerald-500 text-white', error: 'bg-red-900 border-red-400 text-white', warning: 'bg-amber-900 border-amber-400 text-amber-100' };
+const icons = { success: 'fa-circle-check text-emerald-400', error: 'fa-circle-xmark text-red-400', warning: 'fa-star text-amber-400' };
+el.className = ${styles[type]} border-l-4 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-medium transition-all duration-300; el.innerHTML =<i class="fa-solid ${icons[type]} text-base"&gt;&lt;/i&gt;&lt;span&gt;${msg}</span>`;
+box.appendChild(el);
+setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+
+// GİRİŞ EKRANI SEKME DEĞİŞİMİ
+function switchAuthTab(role) {
+authRole = role;
+const buyerBtn = document.getElementById('tab-btn-buyer');
+const sellerBtn = document.getElementById('tab-btn-seller');
+const phoneWrap = document.getElementById('seller-phone-wrapper');
+const phoneInput = document.getElementById('auth-phone');
+
+if (role === 'buyer') {
+buyerBtn.className = 'py-2.5 px-3 rounded-xl text-xs font-bold bg-navy-900 text-white shadow cursor-pointer transition';
+sellerBtn.className = 'py-2.5 px-3 rounded-xl text-xs font-bold text-slate-600 hover:text-navy-900 cursor-pointer transition';
+phoneWrap.classList.add('hidden');
+phoneInput.removeAttribute('required');
+} else {
+sellerBtn.className = 'py-2.5 px-3 rounded-xl text-xs font-bold bg-emerald-600 text-white shadow cursor-pointer transition';
+buyerBtn.className = 'py-2.5 px-3 rounded-xl text-xs font-bold text-slate-600 hover:text-navy-900 cursor-pointer transition';
+phoneWrap.classList.remove('hidden');
+phoneInput.setAttribute('required', 'required');
+}
+}
+
+function handleAuthSubmit(e) {
+e.preventDefault();
+const name = document.getElementById('auth-fullname').value.trim();
+const email = document.getElementById('auth-email').value.trim().toLowerCase();
+const phone = authRole === 'seller' ? document.getElementById('auth-phone').value.trim().replace(/[^0-9]/g, '') : '';
+
+const existing = db.users.find(u => u.email === email);
+if (existing && existing.banned) {
+showToast('Hesabınız yönetici tarafından yasaklanmıştır!', 'error');
+return;
+}
+
+currentUser = {
+id: existing ? existing.id : 'u-' + Date.now(),
+name: name,
+email: email,
+role: authRole,
+phone: phone || (existing ? existing.phone : '905550000000'),
+purchases: existing ? (existing.purchases || 0) : 0,
+salesCount: existing ? (existing.salesCount || 0) : 0,
+banned: false
+};
+
+saveUser();
+checkAuth();
+showToast(Hoş geldin${currentUser.name}!`, 'success');
+}
+
+function quickLogin(role) {
+const email = role === 'buyer' ? 'mert@ogrenci.edu.tr' : 'zeynep@ogrenci.edu.tr';
+const existing = db.users.find(u => u.email === email);
+currentUser = existing || {
+id: 'quick-' + role,
+name: role === 'buyer' ? 'Mert Kaya (Müşteri)' : 'Zeynep Demir (Yıldız Satıcı)',
+email: email,
+role: role,
+phone: '905551112233',
+purchases: role === 'buyer' ? 12 : 3,
+salesCount: role === 'seller' ? 15 : 0,
+banned: false
+};
+saveUser();
+checkAuth();
+showToast(Giriş yapıldı: ${currentUser.name}`, 'success');
+}
+
+function handleLogout() {
+currentUser = null;
+saveUser();
+checkAuth();
+showToast('Çıkış yapıldı.', 'success');
+}
+
+function checkAuth() {
+const authView = document.getElementById('auth-view');
+const appView = document.getElementById('app-view');
+
+if (currentUser) {
+authView.classList.add('hidden');
+appView.classList.remove('hidden');
+document.getElementById('top-user-name').textContent = currentUser.name;
+
+const badge = document.getElementById('top-role-badge');
+const isStar = (currentUser.salesCount || 0) >= 10;
+if (currentUser.role === 'seller') {
+badge.textContent = isStar ? '⭐ YILDIZ SATICI' : 'SATICI';
+badge.className = isStar ? 'text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-400 text-navy-900' : 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-400 text-navy-900';
+} else {
+badge.textContent = 'MÜŞTERİ';
+badge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-400 text-navy-900';
+}
+
+if (currentUser.phone) document.getElementById('new-item-phone').value = currentUser.phone;
+switchTab('pazar');
+} else {
+appView.classList.add('hidden');
+authView.classList.remove('hidden');
+switchAuthTab('buyer');
+}
+}
+
+// GARANTİ ÇALIŞAN SEKME GEÇİŞİ
+function switchTab(tabName) {
+if (tabName === 'admin' && localStorage.getItem(ADMIN_LOCK_KEY) !== 'LOCKED_TRUE') {
+showToast('Yetkisiz cihaz!', 'error');
+switchTab('pazar');
+return;
+}
+
+const allPages = ['pazar', 'yemek', 'dilek', 'profil', 'admin'];
+allPages.forEach(p => {
+const el = document.getElementById(page-${p}`);
+if (el) el.classList.add('hidden');
+});
+
+const target = document.getElementById(page-${tabName}`);
+if (target) target.classList.remove('hidden');
+
+const navTabs = ['pazar', 'yemek', 'dilek', 'profil'];
+navTabs.forEach(t => {
+const btn = document.getElementById(btn-${t}`);
+if (btn) {
+if (t === tabName) {
+btn.className = 'flex flex-col items-center justify-center py-1 text-navy-900 font-bold cursor-pointer';
+} else {
+btn.className = 'flex flex-col items-center justify-center py-1 text-slate-400 cursor-pointer';
+}
+}
+});
+
+if (tabName === 'pazar') {
+renderEsnafBanner();
+renderMarketListings();
+} else if (tabName === 'yemek') {
+renderYemekAndBus();
+} else if (tabName === 'dilek') {
+renderMyFeedbacks();
+} else if (tabName === 'profil') {
+renderProfilePage();
+} else if (tabName === 'admin') {
+renderAdminPanel();
+}
+
+window.scrollTo(0, 0);
+}
+
+function selectCategory(cat) {
+activeCategory = cat;
+document.querySelectorAll('.cat-filter-btn').forEach(btn => {
+btn.className = btn.getAttribute('data-cat') === cat
+? 'cat-filter-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold bg-navy-900 text-white cursor-pointer transition'
+: 'cat-filter-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold bg-white text-slate-600 border border-slate-200 cursor-pointer transition';
+});
+renderMarketListings();
+}
+
+function renderEsnafBanner() {
+const box = document.getElementById('esnaf-ad-box');
+if (!box) return;
+if (!db.ads || db.ads.length === 0) { box.innerHTML = '<div class="p-3 text-center text-xs text-slate-500">Esnaf Reklam Alanı</div>'; return; }
+const ad = db.ads[adSlideIndex % db.ads.length];
+const waUrl = https://wa.me/${ad.phone}?text=+ encodeURIComponent(Merhaba ${ad.name}, YurtPazar üzerinden ulaşıyorum.);
+box.innerHTML = &lt;div class="bg-gradient-to-r from-navy-900 to-navy-800 text-white p-3.5"&gt; &lt;div class="flex items-center justify-between mb-1"&gt; &lt;span class="text-[10px] font-extrabold bg-amber-400 text-navy-900 px-2 py-0.5 rounded"&gt;ESNAF REKLAMI&lt;/span&gt; ${db.ads.length > 1 ? <button type="button" onclick="nextEsnafAd()" class="text-[11px] text-slate-300 hover:text-white cursor-pointer"&gt;Sonraki &lt;i class="fa-solid fa-chevron-right text-[9px]"&gt;&lt;/i&gt;&lt;/button> : ''}
+</div>
+<h3 class="font-bold text-sm text-amber-400 mt-1">${ad.name}&lt;/h3&gt; &lt;p class="text-xs text-slate-200 mt-0.5"&gt;${ad.text}</p>
+<div class="mt-2.5 pt-2 border-t border-slate-700/60 flex items-center justify-between">
+<span class="text-[11px] text-emerald-400 font-medium">Öğrenciye Özel İndirim</span>
+<a href="${waUrl}" target="_blank" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow cursor-pointer active:scale-95 transition flex items-center gap-1.5"&gt; &lt;i class="fa-brands fa-whatsapp"&gt;&lt;/i&gt; Esnafa Yaz &lt;/a&gt; &lt;/div&gt; &lt;/div>;
+}
+function nextEsnafAd() { adSlideIndex++; renderEsnafBanner(); }
+
+function renderMarketListings() {
+const container = document.getElementById('market-list-container');
+const searchInput = document.getElementById('market-search');
+if (!container || !searchInput) return;
+
+const query = searchInput.value.toLowerCase().trim();
+const userPurchases = currentUser ? (currentUser.purchases || 0) : 0;
+const hasDiscountRight = userPurchases > 10;
+
+const badge = document.getElementById('pazar-discount-badge');
+if (badge) {
+if (hasDiscountRight) {
+badge.innerHTML = '🎉 %10 Yıldız İndiriminiz Aktif!';
+badge.className = 'font-bold text-emerald-900 bg-emerald-200 px-2 py-0.5 rounded-md';
+} else {
+badge.innerHTML = ⭐ ${11 - userPurchases} alışveriş daha = %10 İndirim`;
+badge.className = 'font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md';
+}
+}
+
+let items = db.listings.filter(item => {
+const seller = db.users.find(u => u.email === item.sellerEmail || u.id === item.sellerId);
+if (seller && seller.banned) return false;
+const catOk = activeCategory === 'Tümü' || item.category === activeCategory;
+const qOk = item.title.toLowerCase().includes(query) || item.desc.toLowerCase().includes(query) || item.sellerName.toLowerCase().includes(query);
+return catOk && qOk;
+}).map(item => {
+const seller = db.users.find(u => u.email === item.sellerEmail || u.id === item.sellerId);
+const isStarSeller = seller ? (seller.salesCount || 0) >= 10 : false;
+const isFood = item.category === 'Yiyecek & İçecek';
+const applyDiscount = isStarSeller && isFood && hasDiscountRight;
+const finalPrice = applyDiscount ? Math.round(item.price * 0.9) : item.price;
+return { ...item, isStarSeller, applyDiscount, finalPrice };
+});
+
+items.sort((a, b) => a.finalPrice - b.finalPrice);
+
+if (items.length === 0) {
+container.innerHTML = <div class="bg-white rounded-2xl p-8 text-center border border-slate-200"&gt;&lt;i class="fa-solid fa-box-open text-3xl text-slate-300 mb-2"&gt;&lt;/i&gt;&lt;p class="text-sm font-semibold text-slate-600"&gt;Bu kategoride ilan bulunamadı.&lt;/p&gt;&lt;/div>;
+return;
+}
+
+container.innerHTML = items.map(item => {
+const cardStyle = item.isStarSeller ? 'star-seller-border rounded-2xl p-4 transition shadow-xs relative overflow-hidden' : 'bg-white border border-slate-200 rounded-2xl p-4 shadow-xs transition relative overflow-hidden';
+const waText = encodeURIComponent(Merhaba${item.sellerName}, YurtPazar'daki "{item.finalPrice}₺) ilanınız için yazıyorum.); const waLink =https://wa.me/{waText}`;
+
+return &lt;div class="${cardStyle}">
+<div class="flex items-center justify-between gap-2 mb-2">
+<span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">${item.category}&lt;/span&gt; ${item.isStarSeller ? '<span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-400 text-navy-900 flex items-center gap-1"><i class="fa-solid fa-star"></i> Yıldız Satıcı</span>' : ''}
+</div>
+<div class="flex items-start justify-between gap-3">
+<div class="flex-1">
+<h3 class="font-bold text-sm text-navy-900 leading-snug">${item.title}&lt;/h3&gt; &lt;p class="text-xs text-slate-600 mt-1"&gt;${item.desc}</p>
+</div>
+<div class="text-right shrink-0">
+${item.applyDiscount ?
+<div class="text-[11px] text-slate-400 line-through">{item.finalPrice} ₺</div>
+<span class="text-[9px] font-bold bg-amber-100 text-amber-800 px-1 py-0.5 rounded">-%10 İndirim</span>
+:
+<div class="text-lg font-extrabold text-navy-900">latex
+{item.price} ₺&lt;/div&gt; `} &lt;/div&gt; &lt;/div&gt; &lt;div class="mt-3 pt-2.5 border-t border-slate-200/70 flex items-center justify-between text-[11px] text-slate-500"&gt; &lt;span&gt;&lt;i class="fa-solid fa-user-graduate text-navy-900 mr-1"&gt;&lt;/i&gt;&lt;strong&gt;
+
+{item.sellerName}</strong> latex
+{item.room ? `• 
+
+{item.room}: ''}&lt;/span&gt; &lt;/div&gt; &lt;div class="mt-3"&gt; &lt;a href="${waLink}" target="_blank" onclick="incrementPurchase('${item.id}', '${item.sellerEmail || item.sellerId}')" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm active:scale-95 transition">
+<i class="fa-brands fa-whatsapp text-base"></i> Satın Al / WhatsApp ile İletişime Geç
+</a>
+</div>
+</div>`;
+}).join('');
+}
+
+function incrementPurchase(listingId, sellerId) {
+if (!currentUser) return;
+currentUser.purchases = (currentUser.purchases || 0) + 1;
+saveUser();
+
+const seller = db.users.find(u => u.email === sellerId || u.id === sellerId);
+if (seller) {
+seller.salesCount = (seller.salesCount || 0) + 1;
+saveLocalDb();
+if (isCloudReady && dbCloud) {
+dbCloud.collection("users").doc(seller.email).update({ salesCount: seller.salesCount }).catch(() => {});
+}
+}
+
+renderMarketListings();
+if (currentUser.purchases === 11) {
+showToast('TEBRİKLER! 10 alışverişi geçtiniz. Yıldız Satıcı yiyeceklerinde %10 indirim kazandınız!', 'warning');
+} else {
+showToast(WhatsApp açılıyor... Alışveriş sayacınız:${currentUser.purchases}`, 'success');
+}
+}
+
+function openAddModal() { document.getElementById('add-listing-modal').classList.remove('hidden'); document.getElementById('add-listing-modal').classList.add('flex'); }
+function closeAddModal() { document.getElementById('add-listing-modal').classList.add('hidden'); document.getElementById('add-listing-modal').classList.remove('flex'); }
+
+function submitNewListing(e) {
+e.preventDefault();
+const cat = document.getElementById('new-item-cat').value;
+const title = document.getElementById('new-item-title').value.trim();
+const price = parseFloat(document.getElementById('new-item-price').value);
+const room = document.getElementById('new-item-room').value.trim();
+const desc = document.getElementById('new-item-desc').value.trim();
+const phone = document.getElementById('new-item-phone').value.trim().replace(/[^0-9]/g, '');
+
+const fullText = (title + ' ' + desc).toLowerCase();
+const foundBanned = BANNED_WORDS.find(word => fullText.includes(word));
+if (foundBanned) {
+showToast(ENGEL: "${foundBanned}" yurt kurallarına aykırı yasaklı üründür, yayınlanamaz!`, 'error');
+return;
+}
+
+const newId = 'item-' + Date.now();
+const newListing = {
+id: newId,
+sellerId: currentUser.id,
+sellerEmail: currentUser.email,
+sellerName: currentUser.name,
+category: cat,
+title,
+price,
+room,
+desc,
+phone: phone || '905550000000'
+};
+
+db.listings.unshift(newListing);
+saveLocalDb();
+
+if (isCloudReady && dbCloud) {
+dbCloud.collection("listings").doc(newId).set(newListing).catch(() => {});
+}
+
+closeAddModal();
+e.target.reset();
+if (currentUser.phone) document.getElementById('new-item-phone').value = currentUser.phone;
+switchTab('pazar');
+showToast('İlanınız yayınlandı!', 'success');
+}
+
+function renderYemekAndBus() {
+document.getElementById('menu-breakfast-list').innerHTML = db.menu.breakfast.map(m => <li&gt;&lt;i class="fa-solid fa-check text-amber-500 mr-1.5"&gt;&lt;/i&gt;${m}</li>).join(''); document.getElementById('menu-dinner-list').innerHTML = db.menu.dinner.map(m =&gt;<li><i class="fa-solid fa-check text-emerald-500 mr-1.5"></i>${m}&lt;/li>).join('');
+
+const now = new Date();
+const nowMins = now.getHours() * 60 + now.getMinutes();
+document.getElementById('bus-live-time').textContent = now.toTimeString().slice(0, 5);
+
+document.getElementById('bus-list-container').innerHTML = db.buses.map(b => {
+const times = b.times.split(',').map(t => t.trim()).filter(Boolean);
+let nextTime = null, diffMins = 0;
+for (let t of times) {
+const [h, m] = t.split(':').map(Number);
+if (!isNaN(h) && !isNaN(m)) {
+const mins = h * 60 + m;
+if (mins >= nowMins) { nextTime = t; diffMins = mins - nowMins; break; }
+}
+}
+return &lt;div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2"&gt; &lt;div class="flex items-center justify-between"&gt; &lt;span class="bg-navy-900 text-white font-extrabold text-xs px-2.5 py-1 rounded-lg"&gt;${b.line} Nolu Hat</span>
+<span class="text-[11px] text-slate-500">{times.map(t => <span class="text-[11px] font-mono px-2 py-0.5 rounded ${t === nextTime ? 'bg-emerald-600 text-white font-bold' : 'bg-white border border-slate-200 text-slate-600'}">${t}&lt;/span>).join('')}
+</div>
+<div class="text-[11px] font-semibold text-slate-700">
+latex
+{nextTime ? `<i class="fa-solid fa-clock text-emerald-600 mr-1"&gt;&lt;/i&gt; Sıradaki sefer: &lt;strong&gt;
+
+{nextTime}</strong> (${diffMins} dk kaldı) : 'Bugünkü seferler tamamlandı'}
+</div>
+</div>`;
+}).join('');
+}
+
+function submitFeedback(e) {
+e.preventDefault();
+const category = document.getElementById('fb-category').value;
+const title = document.getElementById('fb-title').value.trim();
+const body = document.getElementById('fb-body').value.trim();
+
+const fbId = 'fb-' + Date.now();
+const newFb = {
+id: fbId,
+user: currentUser.name,
+category,
+title,
+body,
+date: new Date().toLocaleDateString('tr-TR')
+};
+
+db.feedbacks.unshift(newFb);
+saveLocalDb();
+
+if (isCloudReady && dbCloud) {
+dbCloud.collection("feedbacks").doc(fbId).set(newFb).catch(() => {});
+}
+
+e.target.reset();
+renderMyFeedbacks();
+showToast('Dilek/şikayetiniz yönetime iletildi.', 'success');
+}
+
+function renderMyFeedbacks() {
+const container = document.getElementById('my-feedbacks-container');
+if (!container || !currentUser) return;
+const list = db.feedbacks.filter(f => f.user === currentUser.name);
+if (list.length === 0) { container.innerHTML = '<p class="text-xs text-slate-400 bg-white p-3 rounded-xl border border-slate-200">Henüz bildiriminiz yok.</p>'; return; }
+container.innerHTML = list.map(f => &lt;div class="bg-white p-3 rounded-xl border border-slate-200 space-y-1"&gt; &lt;div class="flex items-center justify-between"&gt;&lt;span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700"&gt;${f.category}</span><span class="text-[10px] text-slate-400">{f.title}</h4>
+<p class="text-xs text-slate-600">${f.body}&lt;/p&gt; &lt;/div>).join('');
+}
+
+function renderProfilePage() {
+if (!currentUser) return;
+document.getElementById('prof-name').textContent = currentUser.name;
+document.getElementById('prof-email').textContent = currentUser.email;
+
+const roleTag = document.getElementById('prof-role-tag');
+if (currentUser.role === 'seller') {
+const isStar = (currentUser.salesCount || 0) >= 10;
+roleTag.textContent = isStar ? ⭐ Yıldız Satıcı (${currentUser.salesCount} Satış):Satıcı (${currentUser.salesCount || 0} Satış);
+roleTag.className = isStar ? 'inline-block mt-1 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-300 text-navy-900' : 'inline-block mt-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800';
+} else {
+roleTag.textContent = 'Müşteri Hesabı';
+roleTag.className = 'inline-block mt-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800';
+}
+
+const count = currentUser.purchases || 0;
+document.getElementById('prof-purchase-count').textContent = ``${count} Alışveriş`;
+
+const desc = document.getElementById('prof-discount-desc');
+if (count > 10) {
+desc.innerHTML = <strong&gt;Tebrikler!&lt;/strong&gt; Yıldız Satıcıların Yiyecek & İçecek ürünlerinde &lt;strong&gt;%10 indirim&lt;/strong&gt; otomatik uygulanıyor.;
+} else {
+desc.innerHTML = Şu ana kadar &lt;strong&gt;${count}</strong> alışveriş yaptınız. <strong>${11 - count}&lt;/strong&gt; alışveriş sonra %10 indirim aktif olacak.;
+}
+
+const adminEntry = document.getElementById('prof-admin-entry');
+if (localStorage.getItem(ADMIN_LOCK_KEY) === 'LOCKED_TRUE') adminEntry.classList.remove('hidden');
+else adminEntry.classList.add('hidden');
+
+const myListings = db.listings.filter(l => l.sellerEmail === currentUser.email || l.sellerId === currentUser.id);
+const listBox = document.getElementById('prof-my-listings');
+if (myListings.length === 0) {
+listBox.innerHTML = '<p class="text-xs text-slate-400 bg-white p-3 rounded-xl border border-slate-200">Yayında ilanınız yok.</p>';
+} else {
+listBox.innerHTML = myListings.map(l => &lt;div class="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between"&gt; &lt;div&gt;&lt;div class="text-xs font-bold text-navy-900"&gt;${l.title}</div><div class="text-[11px] text-slate-500"><strong>${l.price} ₺&lt;/strong&gt;&lt;/div&gt;&lt;/div&gt; &lt;button type="button" onclick="deleteListingById('${l.id}')" class="text-red-500 hover:bg-red-50 p-2 rounded-lg cursor-pointer"><i class="fa-solid fa-trash"></i></button>
+</div>`).join('');
+}
+}
+
+function deleteListingById(id) {
+db.listings = db.listings.filter(l => l.id !== id);
+saveLocalDb();
+if (isCloudReady && dbCloud) {
+dbCloud.collection("listings").doc(id).delete().catch(() => {});
+}
+showToast('İlan silindi.', 'success');
+renderProfilePage();
+renderMarketListings();
+if (localStorage.getItem(ADMIN_LOCK_KEY) === 'LOCKED_TRUE') renderAdminPanel();
+}
+
+function handleLogoSecretTap() {
+logoTapCounter++;
+clearTimeout(logoTapTimeout);
+logoTapTimeout = setTimeout(() => { logoTapCounter = 0; }, 2000);
+if (logoTapCounter >= 5) {
+logoTapCounter = 0;
+if (localStorage.getItem(ADMIN_LOCK_KEY) === 'LOCKED_TRUE') {
+if (!currentUser) { currentUser = { id: 'admin', name: 'Yurt Yöneticisi', email: 'admin@yurtpazar.local', role: 'seller', purchases: 0, salesCount: 20 }; saveUser(); checkAuth(); }
+switchTab('admin');
+showToast('Admin Paneli açıldı.', 'warning');
+} else {
+document.getElementById('admin-pin-modal').classList.remove('hidden');
+document.getElementById('admin-pin-modal').classList.add('flex');
+}
+}
+}
+
+function closeAdminPinModal() {
+document.getElementById('admin-pin-modal').classList.add('hidden');
+document.getElementById('admin-pin-modal').classList.remove('flex');
+document.getElementById('admin-pin-input').value = '';
+}
+
+function verifyAdminPin() {
+const pin = document.getElementById('admin-pin-input').value.trim();
+if (pin === 'ADMIN2026') {
+localStorage.setItem(ADMIN_LOCK_KEY, 'LOCKED_TRUE');
+closeAdminPinModal();
+if (!currentUser) { currentUser = { id: 'admin', name: 'Yurt Yöneticisi', email: 'admin@yurtpazar.local', role: 'seller', purchases: 0, salesCount: 20 }; saveUser(); checkAuth(); }
+switchTab('admin');
+showToast('Cihaz Admin olarak mühürlendi!', 'warning');
+} else { showToast('Hatalı PIN Kodu!', 'error'); }
+}
+
+function switchAdminTab(tab) {
+['users', 'listings', 'ads', 'life', 'feedbacks'].forEach(t => {
+document.getElementById(admpanel-${t}).classList.add('hidden'); document.getElementById(admtab-latex
+{t}`).className = 'adm-tab-btn px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 text-slate-300 whitespace-nowrap cursor-pointer'; }); document.getElementById(`admpanel-
+
+{tab}).classList.remove('hidden'); document.getElementById(admtab-${tab}).className = 'adm-tab-btn px-3 py-2 rounded-xl text-xs font-bold bg-amber-500 text-navy-900 whitespace-nowrap cursor-pointer';
+}
+
+function renderAdminPanel() {
+document.getElementById('adm-users-list').innerHTML = db.users.map(u => &lt;div class="bg-slate-800 border${u.banned ? 'border-red-500/60 opacity-75' : 'border-slate-700'} p-3 rounded-xl flex items-center justify-between gap-2">
+<div>
+<div class="text-xs font-bold text-white">{u.role})</span></div>
+<div class="text-[11px] text-slate-400">{u.purchases || 0}</div>
+</div>
+<div class="flex items-center gap-1">
+<button type="button" onclick="adminToggleBan('{!u.banned})" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold {u.banned ? 'Aç' : 'Yasakla'}</button>
+<button type="button" onclick="adminRemoveUser('${u.email}')" class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-red-600 text-white cursor-pointer"&gt;&lt;i class="fa-solid fa-user-xmark"&gt;&lt;/i&gt;&lt;/button&gt; &lt;/div&gt; &lt;/div>).join('');
+
+document.getElementById('adm-listings-list').innerHTML = db.listings.map(l => &lt;div class="bg-slate-800 border border-slate-700 p-3 rounded-xl flex items-center justify-between"&gt; &lt;div&gt;&lt;div class="text-xs font-bold text-white"&gt;${l.title}</div><div class="text-[11px] text-slate-400">{l.price} ₺</div></div>
+<button type="button" onclick="deleteListingById('${l.id}')" class="bg-red-600 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg cursor-pointer"&gt;Sil&lt;/button&gt; &lt;/div>).join('');
+
+document.getElementById('adm-ads-list').innerHTML = db.ads.map(ad => &lt;div class="bg-slate-800 border border-slate-700 p-3 rounded-xl flex items-center justify-between"&gt; &lt;div&gt;&lt;div class="text-xs font-bold text-amber-400"&gt;${ad.name} ({ad.text}</div></div>
+<button type="button" onclick="adminDeleteAd('${ad.id}')" class="text-red-400 hover:text-red-300 p-2 cursor-pointer"&gt;&lt;i class="fa-solid fa-trash"&gt;&lt;/i&gt;&lt;/button&gt; &lt;/div>).join('');
+
+document.getElementById('adm-edit-breakfast').value = db.menu.breakfast.join(', ');
+document.getElementById('adm-edit-dinner').value = db.menu.dinner.join(', ');
+
+document.getElementById('adm-bus-edit-list').innerHTML = db.buses.map(b => &lt;div class="bg-slate-900 p-2.5 rounded-xl border border-slate-700 space-y-1.5"&gt; &lt;div class="text-xs font-bold text-emerald-400"&gt;${b.line} - {b.id}" value="{b.id}')" class="bg-emerald-600 text-white text-[11px] font-bold px-3 py-1 rounded-lg cursor-pointer">Saatleri Kaydet</button>
+</div>`).join('');
+
+document.getElementById('adm-feedbacks-list').innerHTML = db.feedbacks.map(f => &lt;div class="bg-slate-800 border border-slate-700 p-3 rounded-xl space-y-1"&gt; &lt;div class="flex justify-between text-[10px] text-amber-400 font-bold"&gt;&lt;span&gt;${f.category} (${f.user})&lt;/span&gt;&lt;span&gt;${f.date}</span></div>
+<div class="text-xs font-bold text-white">${f.title}&lt;/div&gt; &lt;p class="text-xs text-slate-300"&gt;${f.body}</p>
+</div>`).join('');
+}
+
+function adminToggleBan(email, status) {
+const u = db.users.find(x => x.email === email);
+if (u) { u.banned = status; saveLocalDb(); }
+if (isCloudReady && dbCloud) dbCloud.collection("users").doc(email).update({ banned: status }).catch(() => {});
+showToast('Kullanıcı durumu güncellendi.', 'warning');
+renderAdminPanel();
+}
+
+function adminRemoveUser(email) {
+db.users = db.users.filter(x => x.email !== email);
+saveLocalDb();
+if (isCloudReady && dbCloud) dbCloud.collection("users").doc(email).delete().catch(() => {});
+showToast('Üye kaldırıldı.', 'error');
+renderAdminPanel();
+}
+
+function adminAddEsnafAd(e) {
+e.preventDefault();
+const name = document.getElementById('adm-ad-name').value.trim();
+const text = document.getElementById('adm-ad-text').value.trim();
+const phone = document.getElementById('adm-ad-phone').value.trim().replace(/[^0-9]/g, '');
+const rent = document.getElementById('adm-ad-rent').value.trim();
+db.ads.unshift({ id: 'ad-' + Date.now(), name, text, phone, rent });
+saveLocalDb();
+e.target.reset(); renderAdminPanel();
+showToast('Esnaf reklamı eklendi.', 'success');
+}
+
+function adminDeleteAd(id) {
+db.ads = db.ads.filter(a => a.id !== id);
+saveLocalDb();
+renderAdminPanel();
+showToast('Reklam kaldırıldı.', 'success');
+}
+
+function adminSaveMenu() {
+const b = document.getElementById('adm-edit-breakfast').value;
+const d = document.getElementById('adm-edit-dinner').value;
+db.menu.breakfast = b.split(',').map(s => s.trim()).filter(Boolean);
+db.menu.dinner = d.split(',').map(s => s.trim()).filter(Boolean);
+saveLocalDb();
+showToast('Yemek menüsü güncellendi.', 'success');
+}
+
+function adminSaveBusTimes(busId) {
+const val = document.getElementById(bus-times-${busId}`).value;
+const bus = db.buses.find(b => b.id === busId);
+if (bus) { bus.times = val; saveLocalDb(); showToast('Otobüs saatleri güncellendi.', 'success'); }
+}
+
+window.onload = function() {
+initCloudSync();
+checkAuth();
+};
+</script>
+</body>
+</html>
